@@ -369,10 +369,12 @@ DefaultAssay(seu_integrated) <- "RNA"  # Use raw counts
 # Subset to cardiomyocytes
 cm_cells <- WhichCells(seu_integrated, idents = "Cardiomyocytes")
 seu_cm <- subset(seu_integrated, cells = cm_cells)
+
 # Pseudobulk Matrix
 cm_cts <- AggregateExpression(seu_cm, assays = "RNA", group.by = "orig.ident", 
                               slot = "counts", return.seurat = FALSE)
 cm_cts <- cm_cts$RNA
+
 # Prepare Metadata
 colData <- data.frame(samples = colnames(cm_cts))
 
@@ -385,14 +387,14 @@ colData <- colData %>%
     )
   ) %>%
   column_to_rownames(var = "samples")
-# DESeq2 ----
+
 # Create DESeq2 object
 dds <- DESeqDataSetFromMatrix(
   countData = cm_cts, 
   colData = colData, 
   design = ~ condition)
 
-# filter
+# Filter low-count genes
 keep <- rowSums(counts(dds)) >= 10
 dds <- dds[keep, ]
 
@@ -402,25 +404,15 @@ dds$condition <- relevel(dds$condition, ref = "Control")
 # run DESeq2
 dds <- DESeq(dds)
 
-# Check the coefficients for the comparison
+# resultsNames show Control as the reference
 resultsNames(dds)
 
-# Control vs MCT-Water
-res_ctrl_vs_water <- results(dds,
-                             contrast = c("condition", "MCT-Water", "Control")
-)
+# Extract contrasts
+res_ctrl_vs_water <- results(dds, contrast = c("condition", "MCT-Water", "Control"))
+res_ctrl_vs_blum <- results(dds, contrast = c("condition", "MCT-Blumeria", "Control"))
+res_blum_vs_water <- results(dds, contrast = c("condition", "MCT-Blumeria", "MCT-Water"))
 
-# Control vs MCT-Blumeria
-res_ctrl_vs_blum <- results(dds,
-                            contrast = c("condition", "MCT-Blumeria", "Control")
-)
-
-# MCT-Blumeria vs MCT-Water
-res_blum_vs_water <- results(dds,
-                             contrast = c("condition", "MCT-Blumeria", "MCT-Water")
-)
-
-
-
-# Generate results object
-res <- results(dds, name = "Control_vs_MCT-Water_vs_MCT-Blumeria")
+# Compare across contrasts
+summary(res_ctrl_vs_water)
+summary(res_ctrl_vs_blum)
+summary(res_blum_vs_water)
