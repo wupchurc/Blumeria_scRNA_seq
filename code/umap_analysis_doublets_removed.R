@@ -7,7 +7,9 @@ library(patchwork)
 library(scCustomize)
 library(DESeq2)
 library(SummarizedExperiment)
-library(pheatmap)
+library(ComplexHeatmap)
+library(RColorBrewer)
+library(circlize)
 
 # Load control dataset from 10X CellRanger ----
 data_dirs <- c("data/Analysis/cellranger_Control_SP_11_GEX_FL-Z0041/raw_feature_bc_matrix/",
@@ -152,7 +154,7 @@ seu_integrated <- FindNeighbors(seu_integrated, dims = 1:20)
 seu_integrated <- FindClusters(seu_integrated, resolution = 0.03)
 seu_integrated <- RunUMAP(seu_integrated, dims = 1:20)
 
-# Azimuth ----
+# Prepare Data for Export to Azimuth ----
 #saveRDS(seu_integrated, file = "seu_integrated_for_azimuth.rds")
 seu_integrated_for_azimuth <- readRDS("seu_integrated_for_azimuth.rds")
 
@@ -243,6 +245,30 @@ seu_integrated <- RenameIdents(seu_integrated, '9' = 'Neutrophils')
 # rename cluster 10
 seu_integrated <- RenameIdents(seu_integrated, '10' = 'Neuronal')
 
+# Store renamed Idents in metadata column
+seu_integrated$cell_type <- Idents(seu_integrated)
+
+
+# ---- Heatmap of markers used to validate cell type identities ----
+
+
+
+all_markers <- c(
+  "Pdgfra", "Csf1r", "Col1a1", "Cd68", "Adgre1"  # Add more as needed
+)
+
+DoHeatmap(subset(seu_integrated, downsample = 500),
+          features = all_markers,
+          size = 3,
+          hjust = 0.5,
+          vjust = - 0.2,
+          angle = 0, 
+          group.bar.height = 0.06) + 
+  guides(color = "none")
+
+
+
+ 
 
 # --- plotting (still using integrated UMAP) ----
 DefaultAssay(seu_integrated) <- "integrated"  # for plotting/clustering context
