@@ -248,27 +248,74 @@ seu_integrated <- RenameIdents(seu_integrated, '10' = 'Neuronal')
 # Store renamed Idents in metadata column
 seu_integrated$cell_type <- Idents(seu_integrated)
 
+# Set the desired order of cell types
+celltype_order <- c(
+  "Cardiomyocytes",
+  "Fibroblasts",
+  "Macrophages",
+  "T cells",
+  "B cells",
+  "Neutrophils",
+  "Pericytes",
+  "Capillary EC",
+  "Venous EC",
+  "Lymphatic EC",
+  "Neuronal"
+)
+
+# Define colors matching celltype_order 
+cell_cols <- c(
+  "Cardiomyocytes" = "#FF6B6B",
+  "Fibroblasts"    = "#4ECDC4", 
+  "Pericytes"      = "#45B7D1",
+  "Capillary EC"   = "#96CEB4",
+  "Venous EC"      = "#FFEAA7",
+  "Lymphatic EC"   = "#DDA0DD",
+  "Macrophages"    = "#98D8C8",
+  "Neutrophils"    = "#F7DC6F",
+  "T cells"        = "#BB8FCE",
+  "B cells"        = "#85C1E9",
+  "Neuronal"       = "#F8C471"
+)
+
+# Make cell_type a factor with that order
+seu_integrated$cell_type <- factor(
+  seu_integrated$cell_type,
+  levels = celltype_order
+)
 
 # ---- Heatmap of markers used to validate cell type identities ----
 
-
-
 all_markers <- c(
-  "Pdgfra", "Csf1r", "Col1a1", "Cd68", "Adgre1"  # Add more as needed
+  "Tnnt2","Myh6","Ryr2",
+  "Pdgfra", "Col1a1", "Dcn", 
+  "Adgre1","Csf1r",
+  "Scn7a", "Cdh19", "Chl1"
 )
 
-DoHeatmap(subset(seu_integrated, downsample = 500),
+p_heat <- DoHeatmap(subset(seu_integrated, downsample = 1000),
           features = all_markers,
           size = 3,
           hjust = 0.5,
           vjust = - 0.2,
           angle = 0, 
-          group.bar.height = 0.06) + 
-  guides(color = "none")
+          group.bar.height = 0.06,
+          group.by = "cell_type",
+          group.colors = cell_cols) + 
+  guides(color = "none") + 
+  labs(fill = "Z-score")
+
+print(p_heat)
+
+ggsave(
+  filename = "celltype_markers_heatmap.png",  # or .png, .tiff
+  plot     = p_heat,
+  width    = 8,   # adjust as needed
+  height   = 6,
+  dpi      = 300
+)
 
 
-
- 
 
 # --- plotting (still using integrated UMAP) ----
 DefaultAssay(seu_integrated) <- "integrated"  # for plotting/clustering context
@@ -279,21 +326,27 @@ seu_integrated$condition <- factor(
   levels = c("Control", "MCT-Water", "MCT-Blumeria")
 )
 
-
 # Plot UMAPs with identified clusters
-print(DimPlot(seu_integrated, reduction = 'umap',split.by = 'condition', 
-              label = TRUE, label.size = 3, repel = TRUE) + NoLegend())
+print(DimPlot(seu_integrated, reduction = 'umap', 
+              label = TRUE, label.size = 3, repel = TRUE, cols = cell_cols) + NoLegend())
 
 # Relative quantification ----
 
-# shared colors (same order as Idents)
+# After setting celltype_order, reverse it for plotting consistency
+plot_order <- rev(celltype_order)  # Reverse for ggplot/barplot
+# Set Idents and cell_type with plot order
+Idents(seu_integrated) <- factor(seu_integrated$cell_type, levels = plot_order)
+seu_integrated$cell_type <- factor(seu_integrated$cell_type, levels = plot_order)
+# Now cell_types and plots follow your desired order
 cell_types <- levels(Idents(seu_integrated))
+
+
 #cell_cols  <- Seurat::DiscretePalette(length(cell_types))
-cell_cols <- DiscretePalette_scCustomize(
-  num_colors = length(cell_types),
-  palette    = "polychrome"   # or "polychrome", "alphabet2", "varibow"
-)
-names(cell_cols) <- cell_types
+# cell_cols <- DiscretePalette_scCustomize(
+  # num_colors = length(cell_types),
+  # palette    = "polychrome"   # or "polychrome", "alphabet2", "varibow"
+# )
+# names(cell_cols) <- cell_types
 
 
 origin_x <- -15
@@ -394,31 +447,42 @@ avg <- AverageExpression(
   group.by = "orig.ident"
 )$RNA
 
-mat <- t(avg)
+# Remove genes with zero variance across samples
+gene_var <- apply(avg, 1, var)
+avg_filtered <- avg[gene_var > 0, ]
+
+mat <- t(avg_filtered)
 pca <- prcomp(mat, scale. = TRUE)
 
 # Get variance explained percentages
 pc_var <- round(100 * summary(pca)$importance[2, 1:2], 1) #PC1, PC2 %
 
-df <- data.frame(PC1 = pca$x[,1],
-                 PC2 = pca$x[,2],
-                 sample = rownames(pca$x))
+df <- data.frame(
+  PC1 = pca$x[,1],
+  PC2 = pca$x[,2],
+  sample = rownames(pca$x))
 
-sample_condition <- tapply(
-  seu_integrated$condition,
-  seu_integrated$orig.ident,
-  unique
-)
+df$condition <- seu_integrated$condition[match(df$sample,
+                                               seu_integrated$orig.ident)]
+condition_levels <- levels(seu_integrated$condition)
 
-df$condition <- sample_condition[df$sample]
-
-ggplot(df, aes(PC1, PC2, color = condition, fill = condition)) +
+p_pca <- ggplot(df, aes(PC1, PC2, color = condition, fill = condition)) +
   geom_point(size = 3) +
   stat_ellipse(level = 0.95, alpha = 0.3, geom = "polygon") +
   labs(x = paste0("PC1 (", pc_var[1], "%)"),
        y = paste0("PC2 (", pc_var[2], "%)")) + 
   theme_classic() +
   theme(legend.title = element_blank()) # Removes legend title
+
+print(p_pca)
+
+ggsave(
+  filename = "sample_level_pca.png",
+  plot     = p_pca,
+  width    = 8,    # adjust as needed
+  height   = 6,
+  dpi      = 300
+)
 
 # ---- Consolidated Pseudobulking and DESeq2 Function ----
 run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05,
