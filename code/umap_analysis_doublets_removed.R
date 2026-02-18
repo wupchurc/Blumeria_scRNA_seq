@@ -7,7 +7,6 @@ library(patchwork)
 library(scCustomize)
 library(DESeq2)
 library(SummarizedExperiment)
-library(ComplexHeatmap)
 library(RColorBrewer)
 library(circlize)
 library(tidyr)
@@ -330,7 +329,7 @@ seu_integrated$condition <- factor(
 
 # Plot UMAPs with identified clusters
 print(DimPlot(seu_integrated, reduction = 'umap', 
-              label = TRUE, label.size = 3, repel = TRUE, cols = cell_cols) + NoLegend())
+              label = TRUE, label.size = 4, repel = TRUE, cols = cell_cols) + NoLegend())
 
 # Relative quantification ----
 
@@ -594,84 +593,55 @@ run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05
   ))
 }
    
-cm_results <- run_pseudobulk_deg(seu_integrated, "Cardiomyocytes")
-fb_results <- run_pseudobulk_deg(seu_integrated, "Fibroblasts")
+cm_results <- run_pseudobulk_deg(seu_integrated, "Cardiomyocytes", 
+                                 save_results = TRUE)
 
-# ---- Bar Plots of up and down regulated gene counts ----
+fb_results <- run_pseudobulk_deg(seu_integrated, "Fibroblasts",
+                                 save_results = TRUE)
+
+mac_results <- run_pseudobulk_deg(seu_integrated, "Macrophages",
+                                  save_results = TRUE)
+
+t_results <- run_pseudobulk_deg(seu_integrated, "T cells",
+                                save_results = TRUE)
+
+b_results <- run_pseudobulk_deg(seu_integrated, "B cells",
+                                save_results = TRUE)
+# ----MA Plots of up and down regulated gene counts ----
 # Run DSEq2 on all cell types
 deg_results <- list()
 for (cell_type in cell_types) {
   cat("\n=== Processing", cell_type, "===\n")
-  deg_results[[cell_type]] <- run_pseudobulk_deg(seu_integrated, cell_type)
+  deg_results[[cell_type]] <- run_pseudobulk_deg(seu_integrated, cell_type, 
+                                                 save_results = TRUE)
 }
 
-# Extract significant DE gene counts
-sig_counts <- data.frame(
-  cell_type = character(),
-  contrast = character(),
-  upregulated = numeric(),
-  downregulated = numeric()
-)
-
-for (cell_type in cell_types) {
-  res <- deg_results[[cell_type]]$results
+# Function to create one panel
+create_celltype_deg_plot <- function(deg_results, cell_types, contrast_name,
+                                     padj_thresh = 0.05, lfc_thresh = 0) {
   
-  # Water vs Control
-  sig_up_water <- sum(res$water_vs_ctrl$padj < 0.05 & res$water_vs_ctrl$log2FoldChange > 0, na.rm = TRUE)
-  sig_down_water <- sum(res$water_vs_ctrl$padj < 0.05 & res$water_vs_ctrl$log2FoldChange < 0, na.rm = TRUE)
+  # Collect data for all cell types
+  plot_data <- data.frame()
+  up_counts <- integer(length(cell_types))
+  down_counts <- integer(length(cell_types))
   
-  # Blumeria vs Control  
-  sig_up_blum_ctrl <- sum(res$blum_vs_ctrl$padj < 0.05 & res$blum_vs_ctrl$log2FoldChange > 0, na.rm = TRUE)
-  sig_down_blum_ctrl <- sum(res$blum_vs_ctrl$padj < 0.05 & res$blum_vs_ctrl$log2FoldChange < 0, na.rm = TRUE)
-  
-  # Blumeria vs Water
-  sig_up_blum_water <- sum(res$blum_vs_water$padj < 0.05 & res$blum_vs_water$log2FoldChange > 0, na.rm = TRUE)
-  sig_down_blum_water <- sum(res$blum_vs_water$padj < 0.05 & res$blum_vs_water$log2FoldChange < 0, na.rm = TRUE)
-  
-  sig_counts <- rbind(sig_counts, data.frame(
-    cell_type = cell_type,
-    contrast = "Water vs Ctrl",
-    upregulated = sig_up_water,
-    downregulated = sig_down_water
-  ))
-  sig_counts <- rbind(sig_counts, data.frame(
-    cell_type = cell_type,
-    contrast = "Blumeria vs Ctrl", 
-    upregulated = sig_up_blum_ctrl,
-    downregulated = sig_down_blum_ctrl
-  ))
-  sig_counts <- rbind(sig_counts, data.frame(
-    cell_type = cell_type,
-    contrast = "Blumeria vs Water",
-    upregulated = sig_up_blum_water,
-    downregulated = sig_down_blum_water
-  ))
+  for (i in seq_along(cell_types)) {
+    cell_type <- cell_types[i]
+    
+    # Extract the appropriate contrast
+    if (constrast_name == "Water vs Ctrl") {
+      res <- deg_results[[cell_type]]$results$water_vs_ctrl
+    } else if (contrast_name == "Blumeria vs Ctrl") {
+      res <- deg_results[[cell_type]]$results$blum_vs_ctrl
+    } else if (contrast_name == "Blumeria vs Water") {
+      res <- deg_results[[cell_type]]$results$blum_vs_water
+    }
+    
+    # Convert to data frame
+    
+  }
 }
-
-# Create bar plot
-sig_counts_long <- sig_counts %>%
-  pivot_longer(cols = c(upregulated, downregulated), 
-               names_to = "direction", values_to = "count")
-
-# Use your cell type order and colors
-sig_counts_long$cell_type <- factor(sig_counts_long$cell_type, levels = rev(cell_types))
-sig_counts_long$direction <- factor(sig_counts_long$direction, 
-                                    levels = c("upregulated", "downregulated"))
-sig_counts_long$contrast <- factor(sig_counts_long$contrast, 
-                                   levels = c("Water vs Ctrl", 
-                                              "Blumeria vs Ctrl", 
-                                              "Blumeria vs Water"))
-
-p_sig <- ggplot(sig_counts_long, aes(x = cell_type, y = count, fill = direction)) +
-  geom_col(position = "dodge") +
-  facet_wrap(~ contrast, scales = "free_y", ncol = 3) +
-  scale_fill_manual(values = c("upregulated" = "#E31A1C", "downregulated" = "#1F78B4")) +
-  labs(title = "Significant DE Genes (padj < 0.05) Across Cell Types",
-       x = "Cell Type", y = "Number of DE Genes",
-       fill = "Direction") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.position = "bottom")
-
-print(p_sig)
-
+  
+  
+  
+  
