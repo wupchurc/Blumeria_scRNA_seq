@@ -1,20 +1,20 @@
-# load libraries ----
+# load libraries 
 library(Seurat)
-library(DoubletFinder)
-library(tidyverse)
-library(presto)
-library(patchwork)
-library(scCustomize)
 library(DESeq2)
+library(tidyverse)
+library(patchwork)
+
+library(presto)
+
+library(scCustomize)
 library(SummarizedExperiment)
 library(RColorBrewer)
 library(circlize)
 library(tidyr)
-library(dplyr)
 
-# ----
 
-seu_integrated <- readRDS("seu_integrated_for_azimuth.rds")
+# load processed seurat object from rds file 
+seu_integrated <- readRDS("rds_files/seu_integrated.rds")
 
 # use RNA counts/normalized data for DE
 DefaultAssay(seu_integrated) <- "RNA"
@@ -23,7 +23,8 @@ seu_integrated <- JoinLayers(seu_integrated, assay = "RNA")
 # set identities to clusters (from integrated clustering)
 Idents(seu_integrated) <- "seurat_clusters"
 
-# --- conserved markers per cluster across conditions ---
+# ---- conserved markers per cluster across conditions ----
+# Run FindConservedMarkers on clusters to help identify
 markers_cluster0  <- FindConservedMarkers(seu_integrated, ident.1 = 0,  grouping.var = "condition")
 markers_cluster1  <- FindConservedMarkers(seu_integrated, ident.1 = 1,  grouping.var = "condition")
 markers_cluster2  <- FindConservedMarkers(seu_integrated, ident.1 = 2,  grouping.var = "condition")
@@ -38,27 +39,16 @@ markers_cluster10 <- FindConservedMarkers(seu_integrated, ident.1 = 10, grouping
 
 # Renaming clusters 
 print(Idents(seu_integrated))
-# rename cluster 0
 seu_integrated <- RenameIdents(seu_integrated, '0' = 'Fibroblasts')
-# rename cluster 1
 seu_integrated <- RenameIdents(seu_integrated, '1' = 'Capillary EC')
-# rename cluster 2 
 seu_integrated <- RenameIdents(seu_integrated, '2' = 'Macrophages')
-# rename cluster 3
 seu_integrated <- RenameIdents(seu_integrated, '3' = 'Cardiomyocytes')
-# rename cluster 4
 seu_integrated <- RenameIdents(seu_integrated, '4' = 'Pericytes')
-# rename cluster 5 
 seu_integrated <- RenameIdents(seu_integrated, '5' = 'T cells')
-# rename cluster 6
 seu_integrated <- RenameIdents(seu_integrated, '6' = 'Venous EC')
-# rename cluster 7
 seu_integrated <- RenameIdents(seu_integrated, '7' = 'B cells')
-# rename cluster 8
 seu_integrated <- RenameIdents(seu_integrated, '8' = 'Lymphatic EC')
-# rename cluster 9
 seu_integrated <- RenameIdents(seu_integrated, '9' = 'Neutrophils')
-# rename cluster 10
 seu_integrated <- RenameIdents(seu_integrated, '10' = 'Neuronal')
 
 # Store renamed Idents in metadata column
@@ -101,7 +91,6 @@ seu_integrated$cell_type <- factor(
 )
 
 # ---- Heatmap of markers used to validate cell type identities ----
-
 all_markers <- c(
   "Tnnt2","Myh6","Ryr2",
   "Pdgfra", "Col1a1", "Dcn", 
@@ -124,14 +113,12 @@ p_heat <- DoHeatmap(subset(seu_integrated, downsample = 1000),
 print(p_heat)
 
 ggsave(
-  filename = "celltype_markers_heatmap.png",  # or .png, .tiff
+  filename = "output/celltype_markers_heatmap.png",  # or .png, .tiff
   plot     = p_heat,
   width    = 8,   # adjust as needed
   height   = 6,
   dpi      = 300
 )
-
-
 
 # --- plotting (still using integrated UMAP) ----
 DefaultAssay(seu_integrated) <- "integrated"  # for plotting/clustering context
@@ -146,7 +133,7 @@ seu_integrated$condition <- factor(
 print(DimPlot(seu_integrated, reduction = 'umap', 
               label = TRUE, label.size = 4, repel = TRUE, cols = cell_cols) + NoLegend())
 
-# Relative quantification ----
+# ---- Relative quantification ----
 
 # After setting celltype_order, reverse it for plotting consistency
 plot_order <- rev(celltype_order)  # Reverse for ggplot/barplot
@@ -172,7 +159,6 @@ p_umap <- DimPlot(
   reduction  = "umap",
   split.by   = "condition",
   label      = TRUE,
-  # label = FALSE,
   label.size = 3,
   cols       = cell_cols          # <— key line
 ) +
@@ -238,7 +224,7 @@ p_combined <- p_umap / p_bar + plot_layout(heights = c(12, 1))
 print(p_combined)
 
 ggsave(
-  filename = "umap_rel_abundance.png",
+  filename = "output/umap_rel_abundance.png",
   plot     = p_combined,
   width    = 8,    # adjust as needed
   height   = 6,
@@ -284,7 +270,7 @@ p_pca <- ggplot(df, aes(PC1, PC2, color = condition, fill = condition)) +
 print(p_pca)
 
 ggsave(
-  filename = "sample_level_pca.png",
+  filename = "output/sample_level_pca.png",
   plot     = p_pca,
   width    = 8,    # adjust as needed
   height   = 6,
@@ -347,12 +333,14 @@ run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05
                               alpha = alpha)
   res_blum_vs_water <- results(dds, contrast = c("condition", "MCT-Blumeria", "MCT-Water"), 
                                alpha = alpha)
+  res_water_vs_blum <- results(dds, contrast = c("condition", "MCT-Water", "MCT-Blumeria"))
   
   # Print summaries
   cat("\n=== DESeq2 Results Summary for", cell_type, "===\n")
   cat("Water vs Control:\n"); summary(res_water_vs_ctrl)
   cat("\nBlumeria vs Control:\n"); summary(res_blum_vs_ctrl)
   cat("\nBlumeria vs Water:\n"); summary(res_blum_vs_water)
+  cat("\nWater vs Blumeria:\n"); summary(res_water_vs_blum)
   
   # Normalize data for PCA
   rld <- rlog(dds, blind = FALSE)
@@ -366,11 +354,13 @@ run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05
   
   p_ma_water <- plotMA(res_water_vs_ctrl) + ggtitle("MA: Water vs Control")
   p_ma_blum_water <- plotMA(res_blum_vs_water) + ggtitle("MA: Blumeria vs Water")
+  p_ma_water_blum <- plotMA(res_water_vs_blum) + ggtitle("MA: Water vs Blumeria")
   
   # Display plots
   print(p_pca)
   print(p_ma_water)
-  print(p_ma_blum_water)
+  # print(p_ma_blum_water)
+  print(p_ma_water_blum)
   
   # Save results if requested
   if (save_results) {
@@ -383,16 +373,16 @@ run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05
     )
     
     filename <- paste0("DEG_", gsub("[^A-Za-z0-9]", "_", cell_type), ".rds")
-    saveRDS(results_list, file = filename)
+    saveRDS(results_list, file = "rds_files/",filename)
     cat("Results saved to:", filename, "\n")
     
     # Save plots
-    ggsave(paste0("PCA_", gsub("[^A-Za-z0-9]", "_", cell_type), ".png"),
-           plot = p_pca, width = 8, height = 6, dpi = 300)
-    ggsave(paste0("MA_Water_", gsub("[^A-Za-z0-9]", "_", cell_type), ".png"),
-           plot = p_ma_water, width = 8, height = 6, dpi = 300)
-    ggsave(paste0("MA_BlumWater_", gsub("[^A-Za-z0-9]", "_", cell_type), ".png"),
-           plot = p_ma_blum_water, width = 8, height = 6, dpi = 300)
+    # ggsave(paste0("PCA_", gsub("[^A-Za-z0-9]", "_", cell_type), ".png"),
+           # plot = p_pca, width = 8, height = 6, dpi = 300)
+    # ggsave(paste0("MA_Water_", gsub("[^A-Za-z0-9]", "_", cell_type), ".png"),
+           # plot = p_ma_water, width = 8, height = 6, dpi = 300)
+    # ggsave(paste0("MA_BlumWater_", gsub("[^A-Za-z0-9]", "_", cell_type), ".png"),
+           # plot = p_ma_blum_water, width = 8, height = 6, dpi = 300)
   }
   
   # Return results
@@ -400,7 +390,8 @@ run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05
     results = list(
       water_vs_ctrl = res_water_vs_ctrl,
       blum_vs_ctrl = res_blum_vs_ctrl,
-      blum_vs_water = res_blum_vs_water
+      blum_vs_water = res_blum_vs_water,
+      water_vs_blum = res_water_vs_blum
     ),
     dds = dds,
     rld = rld,
@@ -408,27 +399,108 @@ run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05
   ))
 }
    
-cm_results <- run_pseudobulk_deg(seu_integrated, "Cardiomyocytes", 
+cm_results <- run_pseudobulk_deg(seu_integrated, "Cardiomyocytes", alpha = 0.1, 
                                  save_results = TRUE)
 
-fb_results <- run_pseudobulk_deg(seu_integrated, "Fibroblasts",
-                                 save_results = TRUE)
+# ---- Bar Plots of up and down regulated gene counts ----
+# Run DSEq2 on all cell types
+deg_results <- list()
+for (cell_type in cell_types) {
+  cat("\\\\n=== Processing", cell_type, "===\\\\n")
+  deg_results[[cell_type]] <- run_pseudobulk_deg(seu_integrated, cell_type, alpha = 0.1)
+}
 
-mac_results <- run_pseudobulk_deg(seu_integrated, "Macrophages",
-                                  save_results = TRUE)
+# Extract significant DE gene counts
+sig_counts <- data.frame(
+  cell_type = character(),
+  contrast = character(),
+  upregulated = numeric(),
+  downregulated = numeric()
+)
 
-t_results <- run_pseudobulk_deg(seu_integrated, "T cells",
-                                save_results = TRUE)
+for (cell_type in cell_types) {
+  res <- deg_results[[cell_type]]$results
+  
+  # Water vs Control
+  sig_up_water <- sum(res$water_vs_ctrl$padj < 0.1 & res$water_vs_ctrl$log2FoldChange > 0, na.rm = TRUE)
+  sig_down_water <- sum(res$water_vs_ctrl$padj < 0.1 & res$water_vs_ctrl$log2FoldChange < 0, na.rm = TRUE)
+  
+  # Blumeria vs Control  
+  # sig_up_blum_ctrl <- sum(res$blum_vs_ctrl$padj < 0.05 & res$blum_vs_ctrl$log2FoldChange > 0, na.rm = TRUE)
+  # sig_down_blum_ctrl <- sum(res$blum_vs_ctrl$padj < 0.05 & res$blum_vs_ctrl$log2FoldChange < 0, na.rm = TRUE)
+  
+  # Blumeria vs Water
+  # sig_up_blum_water <- sum(res$blum_vs_water$padj < 0.05 & res$blum_vs_water$log2FoldChange > 0, na.rm = TRUE)
+  # sig_down_blum_water <- sum(res$blum_vs_water$padj < 0.05 & res$blum_vs_water$log2FoldChange < 0, na.rm = TRUE)
+  
+  # Water vs Blumeria
+  sig_up_water_blum <- sum(res$water_vs_blum$padj < 0.1 & res$water_vs_blum$log2FoldChange > 0, na.rm = TRUE)
+  sig_down_water_blum <- sum(res$water_vs_blum$padj < 0.1 & res$water_vs_blum$log2FoldChange < 0, na.rm = TRUE)
+  
+  sig_counts <- rbind(sig_counts, data.frame(
+    cell_type = cell_type,
+    contrast = "Water vs Ctrl",
+    upregulated = sig_up_water,
+    downregulated = sig_down_water
+  ))
+  # sig_counts <- rbind(sig_counts, data.frame(
+    # cell_type = cell_type,
+    # contrast = "Blumeria vs Ctrl", 
+    # upregulated = sig_up_blum_ctrl,
+    # downregulated = sig_down_blum_ctrl
+  # ))
+  # sig_counts <- rbind(sig_counts, data.frame(
+    # cell_type = cell_type,
+    # contrast = "Blumeria vs Water",
+    # upregulated = sig_up_blum_water,
+    # downregulated = sig_down_blum_water
+  # ))
+  sig_counts <- rbind(sig_counts, data.frame(
+    cell_type = cell_type,
+    contrast = "Water vs Blumeria",
+    upregulated = sig_up_water_blum,
+    downregulated = sig_down_water_blum
+  ))
+}
 
-b_results <- run_pseudobulk_deg(seu_integrated, "B cells",
-                                save_results = TRUE)
+# Create bar plot
+sig_counts_long <- sig_counts %>%
+  pivot_longer(cols = c(upregulated, downregulated), 
+               names_to = "direction", values_to = "count")
+
+# Use your cell type order and colors
+sig_counts_long$cell_type <- factor(sig_counts_long$cell_type, levels = rev(cell_types))
+sig_counts_long$direction <- factor(sig_counts_long$direction, 
+                                    levels = c("upregulated", "downregulated"))
+sig_counts_long$contrast <- factor(sig_counts_long$contrast, 
+                                   levels = c("Water vs Ctrl", 
+                                              # "Blumeria vs Ctrl", 
+                                              # "Blumeria vs Water",
+                                              "Water vs Blumeria"
+                                              ))
+
+p_sig <- ggplot(sig_counts_long, aes(x = cell_type, y = count, fill = direction)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~ contrast, scales = "free_y", ncol = 3) +
+  scale_fill_manual(values = c("upregulated" = "#E31A1C", "downregulated" = "#1F78B4")) +
+  labs(title = "Significant DE Genes (padj < 0.1) Across Cell Types",
+       x = "Cell Type", y = "Number of DE Genes",
+       fill = "Direction") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom")
+
+print(p_sig)
+
+
 # ----MA Plots of up and down regulated gene counts ----
+
 # Run DSEq2 on all cell types
 deg_results <- list()
 for (cell_type in cell_types) {
   cat("\n=== Processing", cell_type, "===\n")
   deg_results[[cell_type]] <- run_pseudobulk_deg(seu_integrated, cell_type, 
-                                                 save_results = TRUE)
+                                                 alpha = 0.1, save_results = FALSE)
 }
 
 # Function to create one panel
@@ -444,13 +516,13 @@ create_celltype_deg_plot <- function(deg_results, cell_types, contrast_name,
     cell_type <- cell_types[i]
     
     # Extract the appropriate contrast
-    if (constrast_name == "Water vs Ctrl") {
-      res <- deg_results[[cell_type]]$results$water_vs_ctrl
-    } else if (contrast_name == "Blumeria vs Ctrl") {
-      res <- deg_results[[cell_type]]$results$blum_vs_ctrl
-    } else if (contrast_name == "Blumeria vs Water") {
-      res <- deg_results[[cell_type]]$results$blum_vs_water
-    }
+    #if (constrast_name == "Water vs Ctrl") {
+      # res <- deg_results[[cell_type]]$results$water_vs_ctrl
+    # } else if (contrast_name == "Blumeria vs Ctrl") {
+      # res <- deg_results[[cell_type]]$results$blum_vs_ctrl
+    # } else if (contrast_name == "Blumeria vs Water") {
+      # res <- deg_results[[cell_type]]$results$blum_vs_water
+    # }
     
     # Convert to data frame
     
