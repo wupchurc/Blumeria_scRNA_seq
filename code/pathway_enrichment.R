@@ -2,10 +2,12 @@ library(clusterProfiler)
 library(enrichplot)
 library(org.Rn.eg.db)
 library(DESeq2)
+library(ggtangle)
+library(ggplot2)
 
-cm_results <- readRDS("DEG_Cardiomyocytes.rds")
-fb_results <- readRDS("DEG_Fibroblasts.rds")
-mac_results <- readRDS("DEG_Macrophages.rds")
+cm_results <- readRDS("rds_files/DEG_Cardiomyocytes.rds")
+fb_results <- readRDS("rds_files/DEG_Fibroblasts.rds")
+mac_results <- readRDS("rds_files/DEG_Macrophages.rds")
 t_results <- readRDS("DEG_T_cells.rds")
 b_results <- readRDS("DEG_B_cells.rds")
 ntphl_results <- readRDS("DEG_Neutrophils.rds") 
@@ -13,7 +15,7 @@ per_results <- readRDS("DEG_Pericytes.rds")
 cap_ec_results <- readRDS("DEG_Capillary_EC.rds")
 ven_ec_results <- readRDS("DEG_Venous_EC.rds")
 lymp_ec_results <- readRDS("DEG_Lymphatic_EC.rds")
-neuro_results <- readRDS("DEG_Neuronal.rds")
+neuro_results <- readRDS("rds_files/DEG_Neuronal.rds")
 
 # Function to process one DESeqResults → up/down ENTREZ lists
 get_sig_genes <- function(res, lfc_threshold = 0, padj_threshold = 0.05) {
@@ -34,77 +36,76 @@ get_sig_genes <- function(res, lfc_threshold = 0, padj_threshold = 0.05) {
 sig_lists <- list(
   water_vs_ctrl = get_sig_genes(cm_results$water_vs_ctrl),
   blum_vs_ctrl  = get_sig_genes(cm_results$blum_vs_ctrl),
-  blum_vs_water = get_sig_genes(cm_results$blum_vs_water)
+  blum_vs_water = get_sig_genes(cm_results$blum_vs_water),
+  water_vs_blum = get_sig_genes(cm_results$water_vs_blum)
 )
 
-# Individual ORA results (up/down per contrast)
-ego_up_all <- list(
-  water_vs_ctrl = enrichGO(gene=sig_lists$water_vs_ctrl$up, 
-                           universe=sig_lists$water_vs_ctrl$all,
-                           OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
-                           pvalueCutoff=0.05, qvalueCutoff=0.05),
-  blum_vs_ctrl  = enrichGO(gene=sig_lists$blum_vs_ctrl$up, 
-                           universe=sig_lists$blum_vs_ctrl$all,
-                           OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
-                           pvalueCutoff=0.05, qvalueCutoff=0.05),
-  blum_vs_water = enrichGO(gene=sig_lists$blum_vs_water$up, 
-                           universe=sig_lists$blum_vs_water$all,
-                           OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
-                           pvalueCutoff=0.05, qvalueCutoff=0.05)
-)
-
-ego_down_all <- list(
-  water_vs_ctrl = enrichGO(gene=sig_lists$water_vs_ctrl$down, 
-                           universe=sig_lists$water_vs_ctrl$all,
-                           OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
-                           pvalueCutoff=0.05, qvalueCutoff=0.05),
-  blum_vs_ctrl  = enrichGO(gene=sig_lists$blum_vs_ctrl$down, 
-                           universe=sig_lists$blum_vs_ctrl$all,
-                           OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
-                           pvalueCutoff=0.05, qvalueCutoff=0.05),
-  blum_vs_water = enrichGO(gene=sig_lists$blum_vs_water$down, 
-                           universe=sig_lists$blum_vs_water$all,
-                           OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
-                           pvalueCutoff=0.05, qvalueCutoff=0.05)
-)
+shared_background <- unique(c(
+  sig_lists$water_vs_ctrl$all,
+  sig_lists$water_vs_blum$all
+))
 
 comp_up <- compareCluster(
   geneClusters = list(
     Water_vs_Ctrl = sig_lists$water_vs_ctrl$up,
-    Blum_vs_Ctrl  = sig_lists$blum_vs_ctrl$up,
-    Blum_vs_Water = sig_lists$blum_vs_water$up
+    Water_vs_Blum = sig_lists$water_vs_blum$up
   ),
   fun = "enrichGO",
-  OrgDb = org.Rn.eg.db, ont="BP", pvalueCutoff=0.05
+  universe = shared_background,
+  OrgDb = org.Rn.eg.db,
+  keyType = "ENTREZID",
+  ont = "BP",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.2,
+  minGSSize = 5,
+  readable = TRUE
 )
 
 comp_down <- compareCluster(
   geneClusters = list(
     Water_vs_Ctrl = sig_lists$water_vs_ctrl$down,
-    Blum_vs_Ctrl  = sig_lists$blum_vs_ctrl$down,
-    Blum_vs_Water = sig_lists$blum_vs_water$down
+    Water_vs_Blum = sig_lists$water_vs_blum$down
   ),
   fun = "enrichGO",
-  OrgDb = org.Rn.eg.db, ont="BP", pvalueCutoff=0.05
+  universe = shared_background,
+  OrgDb = org.Rn.eg.db,
+  keyType = "ENTREZID",
+  ont = "BP",
+  pvalueCutoff = 0.1,
+  qvalueCutoff = 0.2,
+  minGSSize = 5,
+  readable = TRUE
 )
 
-dotplot(comp_up, showCategory=5, font.size = 8, size = "Count", title = "Cardiomyocytes - Upregulated")
-dotplot(comp_down, showCategory=5, font.size=8, size = "Count", title = "Cardiomyocytes - Downregulated")
+dotplot(comp_up, showCategory=10, font.size = 8, size = "Count", title = "Cardiomyocytes - Upregulated")
+p <- dotplot(comp_down, showCategory=10, font.size=8, size = "Count", title = "Cardiomyocytes - Downregulated")
+
+p + scale_size_continuous(
+  name = "Gene\nCount",
+  breaks = c(5,10,15,20,25),
+  range = c(2,10)
+)
 
 # Individual contrast
-# dotplot(ego_up_all$water_vs_ctrl, showCategory=15, title = "Water vs Ctrl - Upregulated")
-# dotplot(ego_up_all$blum_vs_ctrl, showCategory=15, title = "Blum vs Ctrl - Upregulated")
-# dotplot(ego_up_all$blum_vs_water, showCategory=15, title = "Blum vs Water - Upregulated")
+ego_down_all <- list(
+  water_vs_ctrl = enrichGO(gene=sig_lists$water_vs_ctrl$down, 
+                           universe=sig_lists$water_vs_ctrl$all,
+                           OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
+                           pvalueCutoff=0.2, qvalueCutoff=0.2),
+  water_vs_blum = enrichGO(gene=sig_lists$water_vs_blum$down, 
+                           universe=sig_lists$water_vs_blum$all,
+                           OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
+                           pvalueCutoff=.2, qvalueCutoff=0.5)
+)
 
-# dotplot(ego_down_all$water_vs_ctrl, showCategory=15, title = "Water vs Ctrl - Downregulated")
-# dotplot(ego_down_all$blum_vs_ctrl, showCategory=15, title = "Blum vs Ctrl - Downregulated")
-# dotplot(ego_down_all$blum_vs_water, showCategory=15, title = "Blum vs Water - Downregulated")
+dotplot(ego_down_all$water_vs_blum, showCategory=15, title = "Water vs Blum - Downregulated")
 
 # ---- Analyze Fibroblasts ----
 sig_lists <- list(
   water_vs_ctrl = get_sig_genes(fb_results$water_vs_ctrl, lfc_threshold = 0),
   blum_vs_ctrl  = get_sig_genes(fb_results$blum_vs_ctrl, lfc_threshold = 0),
-  blum_vs_water = get_sig_genes(fb_results$blum_vs_water, lfc_threshold = 0)
+  blum_vs_water = get_sig_genes(fb_results$blum_vs_water, lfc_threshold = 0), 
+  water_vs_blum = get_sig_genes(fb_results$water_vs_blum, lfc_threshold = 0)
 )
 
 # Individual ORA results (up/down per contrast)
@@ -112,7 +113,7 @@ ego_up_all <- list(
   water_vs_ctrl = enrichGO(gene=sig_lists$water_vs_ctrl$up, 
                            universe=sig_lists$water_vs_ctrl$all,
                            OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
-                           pvalueCutoff=0.05, qvalueCutoff=0.05),
+                           pvalueCutoff=0.1, qvalueCutoff=0.1),
   blum_vs_ctrl  = enrichGO(gene=sig_lists$blum_vs_ctrl$up, 
                            universe=sig_lists$blum_vs_ctrl$all,
                            OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
@@ -120,53 +121,64 @@ ego_up_all <- list(
   blum_vs_water = enrichGO(gene=sig_lists$blum_vs_water$up, 
                            universe=sig_lists$blum_vs_water$all,
                            OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
-                           pvalueCutoff=0.05, qvalueCutoff=0.05)
+                           pvalueCutoff=0.05, qvalueCutoff=0.05),
+  water_vs_blum = enrichGO(gene=sig_lists$water_vs_blum$up, 
+                           universe=sig_lists$water_vs_blum$all,
+                           OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
+                           pvalueCutoff=0.1, qvalueCutoff=0.1)
 )
 
 ego_down_all <- list(
   water_vs_ctrl = enrichGO(gene=sig_lists$water_vs_ctrl$down, 
-                           #universe=sig_lists$water_vs_ctrl$all,
+                           universe=sig_lists$water_vs_ctrl$all,
                            OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
                            pvalueCutoff=0.05, qvalueCutoff=0.05),
   blum_vs_ctrl  = enrichGO(gene=sig_lists$blum_vs_ctrl$down, 
-                           #universe=sig_lists$blum_vs_ctrl$all,
+                           universe=sig_lists$blum_vs_ctrl$all,
                            OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
                            pvalueCutoff=0.05, qvalueCutoff=0.05),
   blum_vs_water = enrichGO(gene=sig_lists$blum_vs_water$down, 
-                           #universe=sig_lists$blum_vs_water$all,
+                           universe=sig_lists$blum_vs_water$all,
                            OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
-                           pvalueCutoff=0.05, qvalueCutoff=0.05)
+                           pvalueCutoff=0.05, qvalueCutoff=0.05),
+  water_vs_blum = enrichGO(gene=sig_lists$water_vs_blum$down, 
+                           universe=sig_lists$water_vs_blum$all,
+                           OrgDb=org.Rn.eg.db, keyType="ENTREZID", ont="BP", 
+                           pvalueCutoff=0.1, qvalueCutoff=0.1)
 )
 
 comp_up <- compareCluster(
   geneClusters = list(
     Water_vs_Ctrl = sig_lists$water_vs_ctrl$up,
-    Blum_vs_Ctrl  = sig_lists$blum_vs_ctrl$up,
-    Blum_vs_Water = sig_lists$blum_vs_water$up
+    # Blum_vs_Ctrl  = sig_lists$blum_vs_ctrl$up,
+    # Blum_vs_Water = sig_lists$blum_vs_water$up,
+    Water_vs_Blum = sig_lists$water_vs_blum$up
   ),
   fun = "enrichGO",
-  OrgDb = org.Rn.eg.db, ont="BP", pvalueCutoff=0.05
+  OrgDb = org.Rn.eg.db, ont="BP", pvalueCutoff=0.1
 )
 
 comp_down <- compareCluster(
   geneClusters = list(
     Water_vs_Ctrl = sig_lists$water_vs_ctrl$down,
-    Blum_vs_Ctrl  = sig_lists$blum_vs_ctrl$down,
-    Blum_vs_Water = sig_lists$blum_vs_water$down
+    # Blum_vs_Ctrl  = sig_lists$blum_vs_ctrl$down,
+    # Blum_vs_Water = sig_lists$blum_vs_water$down,
+    Water_vs_Blum = sig_lists$water_vs_blum$down
   ),
   fun = "enrichGO",
-  OrgDb = org.Rn.eg.db, ont="BP", pvalueCutoff=0.05
+  OrgDb = org.Rn.eg.db, ont="BP", pvalueCutoff=0.1
 )
 
-dotplot(comp_up, showCategory=5,font.size = 8, size = "Count", title = "Fibroblasts - Upregulated")
-dotplot(comp_down, showCategory=5, font.size=8, size = "Count", title = "Fibroblasts - Downregulated")
+dotplot(comp_up, showCategory=10,font.size = 8, size = "Count", title = "Fibroblasts - Upregulated")
+dotplot(comp_down, showCategory=10, font.size=6, size = "Count", title = "Fibroblasts - Downregulated")
 
-cnetplot(comp_up, showCategory=5)
+cnetplot(comp_up, showCategory=10)
 # ---- Analyze Macrophages ----
 sig_lists <- list(
   water_vs_ctrl = get_sig_genes(mac_results$water_vs_ctrl),
   blum_vs_ctrl  = get_sig_genes(mac_results$blum_vs_ctrl),
-  blum_vs_water = get_sig_genes(mac_results$blum_vs_water)
+  blum_vs_water = get_sig_genes(mac_results$blum_vs_water),
+  water_vs_blum = get_sig_genes(mac_results$water_vs_blum)
 )
 
 # Individual ORA results (up/down per contrast)
@@ -204,25 +216,27 @@ ego_down_all <- list(
 comp_up <- compareCluster(
   geneClusters = list(
     Water_vs_Ctrl = sig_lists$water_vs_ctrl$up,
-    Blum_vs_Ctrl  = sig_lists$blum_vs_ctrl$up,
-    Blum_vs_Water = sig_lists$blum_vs_water$up
+    # Blum_vs_Ctrl  = sig_lists$blum_vs_ctrl$up,
+    # Blum_vs_Water = sig_lists$blum_vs_water$up,
+    Water_vs_Blum = sig_lists$water_vs_blum$up
   ),
   fun = "enrichGO",
-  OrgDb = org.Rn.eg.db, ont="BP", pvalueCutoff=0.05
+  OrgDb = org.Rn.eg.db, ont="BP", pvalueCutoff=0.1
 )
 
 comp_down <- compareCluster(
   geneClusters = list(
     Water_vs_Ctrl = sig_lists$water_vs_ctrl$down,
-    Blum_vs_Ctrl  = sig_lists$blum_vs_ctrl$down,
-    Blum_vs_Water = sig_lists$blum_vs_water$down
+    # Blum_vs_Ctrl  = sig_lists$blum_vs_ctrl$down,
+    # Blum_vs_Water = sig_lists$blum_vs_water$down,
+    Water_vs_Blum = sig_lists$water_vs_blum$down
   ),
   fun = "enrichGO",
-  OrgDb = org.Rn.eg.db, ont="BP", pvalueCutoff=0.05
+  OrgDb = org.Rn.eg.db, ont="BP", pvalueCutoff=0.1
 )
 
-dotplot(comp_up, showCategory=5, font.size=8, size = "Count", title = "Macrophages - Upregulated")
-dotplot(comp_down, showCategory=5, font.size=8, size = "Count", title = "Macrophages - Downregulated")
+dotplot(comp_up, showCategory=10, font.size=8, size = "Count", title = "Macrophages - Upregulated")
+dotplot(comp_down, showCategory=10, font.size=6, size = "Count", title = "Macrophages - Downregulated")
 
 # ---- Analyze T cells ----
 sig_lists <- list(
