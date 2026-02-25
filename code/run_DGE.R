@@ -4,12 +4,12 @@ library(DESeq2)
 library(tidyverse)
 library(patchwork)
 
-library(presto)
-library(scCustomize)
-library(SummarizedExperiment)
-library(RColorBrewer)
-library(circlize)
-library(tidyr)
+# library(presto)
+# library(scCustomize)
+# library(SummarizedExperiment)
+# library(RColorBrewer)
+# library(circlize)
+# library(tidyr)
 
 
 seu_obj <- readRDS("rds_files/seu_for_DGE.rds")
@@ -143,6 +143,8 @@ run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05
 cm_results <- run_pseudobulk_deg(seu_obj, "Cardiomyocytes", alpha = 0.1, 
                                  save_results = TRUE)
 
+run_pseudobulk_deg(seu_obj, "Pericytes", alpha = 0.1, 
+                   save_results = TRUE)
 # ---- Bar Plots of up and down regulated gene counts ----
 # Run DSEq2 on all cell types
 deg_results <- list()
@@ -150,7 +152,7 @@ cell_types <- levels(seu_obj)
 for (cell_type in cell_types) {
   cat("\\\\n=== Processing", cell_type, "===\\\\n")
   deg_results[[cell_type]] <- run_pseudobulk_deg(seu_obj, cell_type, 
-                                                 alpha = 0.1, save_results = TRUE)
+                                                 alpha = 0.1, save_results = FALSE)
 }
 
 # Extract significant DE gene counts
@@ -235,6 +237,7 @@ p_sig <- ggplot(sig_counts_long, aes(x = cell_type, y = count, fill = direction)
 
 print(p_sig)
 
+ggsave("output/DE_Genes_Bar_pval_1.png",plot = p_sig, width = 12, height = 6, dpi = 300)
 
 # ----MA Plots of up and down regulated gene counts ----
 

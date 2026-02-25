@@ -5,13 +5,11 @@ library(tidyverse)
 library(patchwork)
 
 library(presto)
-
 library(scCustomize)
 library(SummarizedExperiment)
 library(RColorBrewer)
 library(circlize)
 library(tidyr)
-
 
 # load processed seurat object from rds file 
 seu_integrated <- readRDS("rds_files/seu_integrated.rds")
@@ -277,6 +275,10 @@ ggsave(
   dpi      = 300
 )
 
+# ---- Save
+
+saveRDS(seu_integrated, file = "rds_files/seu_for_DGE.rds")
+
 # ---- Consolidated Pseudobulking and DESeq2 Function ----
 run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05,
                                plot_title = NULL, save_results = FALSE) {
@@ -373,7 +375,7 @@ run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05
     )
     
     filename <- paste0("DEG_", gsub("[^A-Za-z0-9]", "_", cell_type), ".rds")
-    saveRDS(results_list, file = "rds_files/",filename)
+    saveRDS(results_list, file = paste0("rds_files/", filename))
     cat("Results saved to:", filename, "\n")
     
     # Save plots
@@ -395,7 +397,10 @@ run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05
     ),
     dds = dds,
     rld = rld,
-    plots = list(pca = p_pca, ma_water = p_ma_water, ma_blum_water = p_ma_blum_water)
+    plots = list(pca = p_pca
+                 # , ma_water = p_ma_water, 
+                 # ma_blum_water = p_ma_blum_water
+                 )
   ))
 }
    
@@ -407,7 +412,8 @@ cm_results <- run_pseudobulk_deg(seu_integrated, "Cardiomyocytes", alpha = 0.1,
 deg_results <- list()
 for (cell_type in cell_types) {
   cat("\\\\n=== Processing", cell_type, "===\\\\n")
-  deg_results[[cell_type]] <- run_pseudobulk_deg(seu_integrated, cell_type, alpha = 0.1)
+  deg_results[[cell_type]] <- run_pseudobulk_deg(seu_integrated, cell_type, 
+                                                 alpha = 0.1, save_results = TRUE)
 }
 
 # Extract significant DE gene counts
