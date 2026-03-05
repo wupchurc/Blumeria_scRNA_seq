@@ -7,9 +7,10 @@
     "Depends",
     "LinkingTo"
   ],
-  "ppm.enabled": null,
+  "ppm.enabled": true,
   "ppm.ignored.urls": [],
   "r.version": null,
+  "snapshot.dev": false,
   "snapshot.type": "implicit",
   "use.cache": false,
   "vcs.ignore.cellar": true,
