@@ -4,6 +4,17 @@ library(DESeq2)
 library(tidyverse)
 library(patchwork)
 
+<<<<<<< HEAD
+=======
+# library(presto)
+# library(scCustomize)
+# library(SummarizedExperiment)
+# library(RColorBrewer)
+# library(circlize)
+# library(tidyr)
+
+
+>>>>>>> 91a714319c558dc3eef51c9b9fec911fab8bc9a6
 seu_obj <- readRDS("rds_files/seu_for_DGE.rds")
 
 # ---- Consolidated Pseudobulking and DESeq2 Function ----
@@ -136,6 +147,8 @@ run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05
 cm_results <- run_pseudobulk_deg(seu_obj, "Cardiomyocytes", alpha = 0.1, 
                                  save_results = FALSE)
 
+run_pseudobulk_deg(seu_obj, "Pericytes", alpha = 0.1, 
+                   save_results = TRUE)
 # ---- Bar Plots of up and down regulated gene counts ----
 # Run DSEq2 on all cell types
 deg_results <- list()
