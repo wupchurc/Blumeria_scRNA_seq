@@ -4,18 +4,9 @@ library(DESeq2)
 library(tidyverse)
 library(patchwork)
 
-<<<<<<< HEAD
-=======
-# library(presto)
-# library(scCustomize)
-# library(SummarizedExperiment)
-# library(RColorBrewer)
-# library(circlize)
-# library(tidyr)
 
-
->>>>>>> 91a714319c558dc3eef51c9b9fec911fab8bc9a6
-seu_obj <- readRDS("rds_files/seu_for_DGE.rds")
+# seu_obj <- readRDS("rds_files/seu_for_DGE.rds")
+seu_obj <- readRDS("/scratch.global/wupchurc/rds_files/seu_for_DGE.rds")
 
 # ---- Consolidated Pseudobulking and DESeq2 Function ----
 run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05,
@@ -115,7 +106,7 @@ run_pseudobulk_deg <- function(seu_obj, cell_type, min_counts = 10, alpha = 0.05
     )
     
     filename <- paste0("DEG_", gsub("[^A-Za-z0-9]", "_", cell_type), ".rds")
-    saveRDS(results_list, file = paste0("rds_files/", filename))
+    saveRDS(results_list, file = paste0("/scratch.global/wupchurc/rds_files/", filename))
     cat("Results saved to:", filename, "\n")
     
     # Save plots
