@@ -3,7 +3,6 @@
 .Rhistory
 .RData
 .Ruserdata
-
 # Data/outputs
 *_scratch/
 01-raw_data/
@@ -17,8 +16,9 @@ data/
 *.csv
 output/
 results/
-
-# renv 
+# renv
 renv/library/
 !renv/activate.R
 !renv.lock
+01-raw_data_scratch
+03-analysis_scratch
