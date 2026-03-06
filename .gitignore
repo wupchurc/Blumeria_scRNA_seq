@@ -5,6 +5,12 @@
 .Ruserdata
 
 # Data/outputs
+01-raw_data_scratch/
+01-raw_data/
+02-processed/
+03-analysis/
+03-analysis_scratch/
+04-results/
 data/
 *.h5
 *.rds
